@@ -152,12 +152,21 @@
 
   // Full live list from Cfx.re, decoded in a Web Worker (assets/live-worker.js).
   let liveRunning = false;
+  // Cfx.re's stream sometimes refuses other websites (CORS). After a failure, wait before
+  // trying again (remembered across reloads) so the console isn't flooded with errors.
+  const LIVE_BACKOFF_MS = 15 * 60 * 1000;
+  const liveBlockedUntil = () => { try { return +sessionStorage.getItem('liveBlockedUntil') || 0; } catch { return 0; } };
   function loadLiveList() {
-    if (liveRunning || !CFG.liveList || typeof Worker === 'undefined') return Promise.resolve(false);
+    if (liveRunning || !CFG.liveList || typeof Worker === 'undefined' || Date.now() < liveBlockedUntil()) return Promise.resolve(false);
     liveRunning = true;
     return new Promise((resolve) => {
       let w;
-      const finish = (ok) => { liveRunning = false; try { w && w.terminate(); } catch { /* ignore */ } resolve(ok); };
+      const finish = (ok) => {
+        liveRunning = false;
+        try { w && w.terminate(); } catch { /* ignore */ }
+        try { if (ok) sessionStorage.removeItem('liveBlockedUntil'); else sessionStorage.setItem('liveBlockedUntil', String(Date.now() + LIVE_BACKOFF_MS)); } catch { /* ignore */ }
+        resolve(ok);
+      };
       const timer = setTimeout(() => finish(false), 90000);
       try {
         const src = document.querySelector('meta[name="live-worker"]')?.content || 'assets/live-worker.js';
@@ -966,7 +975,7 @@
       const ago = Math.max(1, Math.round((Date.now() - h.entry.first) / 60000));
       const agoTxt = ago < 90 ? `${ago} min` : ago < 2880 ? `${Math.round(ago / 60)} hours` : `${Math.round(ago / 1440)} days`;
       const since = new Date(h.entry.first).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-      const collecting = `<div class="collecting"><div class="spinner sm"></div><div><b>Collecting data for this server</b>
+      const collecting = `<div class="collecting"><span class="collect-ic">${ICON.chart}</span><div><b>Collecting data for this server</b>
         <span>Tracking started ${esc(agoTxt)} ago. A new sample is added every time the list updates (about every 10 minutes), so the ${r.unit === 'h' ? 'hourly' : 'daily'} chart fills in over time.</span></div></div>`;
       box.innerHTML = head + (covered < 2 ? collecting + (tot.n ? `<div class="range-summary"><span>Average so far <b>${fmt(Math.round(tot.sum / tot.n))}</b></span><span>Peak so far <b>${fmt(tot.peak)}</b></span></div>` : '') : `
         ${chartSvg(pts, r.unit, tz)}
