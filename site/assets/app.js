@@ -632,7 +632,7 @@
           ${tags.length ? `<div class="section"><h2>Tags</h2><div class="res-list">${tags.map((t) => `<a class="chip" href="#/?tag=${encodeURIComponent(t)}${s.game === 'redm' ? '&game=redm' : ''}">${esc(t)}</a>`).join('')}</div></div>` : ''}
 
           ${live === undefined || live === null ? '<div class="section"><div class="skeleton" style="width:50%"></div></div>' : ''}
-          ${live === false ? '<div class="section note">Live details (resources, owner, links) could not be loaded right now. Showing the latest snapshot.</div>' : ''}
+          ${live === false ? '<div class="section note">Cfx.re didn\'t answer for owner, resources and links just now. Player counts above are from the latest snapshot. <button class="chip" id="retryLive" style="margin-left:6px">Retry</button></div>' : ''}
 
           ${resources && resources.length ? `<div class="section"><h2>Resources <span class="n">${fmt(resources.length)}</span></h2><div class="res-list" id="resList">${resources.map((r, i) => `<span class="chip"${i >= 24 ? ' hidden' : ''}>${esc(r)}</span>`).join('')}${resources.length > 24 ? `<button class="chip show-all" id="showAllRes">Show all ${fmt(resources.length)}</button>` : ''}</div></div>` : ''}
         </div>
@@ -662,6 +662,7 @@
       const on = favorites.has(s.id);
       e.currentTarget.innerHTML = `${on ? ICON.star : ICON.starO} ${on ? 'Favorited' : 'Favorite'}`;
     });
+    document.getElementById('retryLive')?.addEventListener('click', () => { drawDetail(s, null); loadLive(s.id, BY_ID.get(s.id) || null); });
     document.getElementById('showAllRes')?.addEventListener('click', (e) => {
       document.querySelectorAll('#resList [hidden]').forEach((el) => (el.hidden = false));
       e.currentTarget.remove();
@@ -675,15 +676,31 @@
   let liveToken = 0;
   async function loadLive(id, snap) {
     const token = ++liveToken;
+    const stillHere = () => token === liveToken && parseHash().id === id;
     let live = false;
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(CFG.liveServerApi + encodeURIComponent(id), { signal: ctrl.signal });
-      clearTimeout(t);
-      if (res.ok) live = await res.json();
-    } catch { live = false; }
-    if (token !== liveToken || parseHash().id !== id) return;
+    // CFX occasionally rejects a request (rate limiting); those rejections carry no CORS
+    // headers, so they surface as network errors. Retry a few times before giving up.
+    for (const wait of [0, 1500, 4000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      if (!stillHere()) return;
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(CFG.liveServerApi + encodeURIComponent(id), { signal: ctrl.signal, cache: 'no-store' });
+        clearTimeout(t);
+        if (res.ok) { live = await res.json(); break; }
+      } catch { /* try again */ }
+    }
+    if (live && live.Data) {
+      try { sessionStorage.setItem('live:' + id, JSON.stringify({ at: Date.now(), live })); } catch { /* ignore */ }
+    } else {
+      // Fall back to the last good live response from this browser session (≤ 30 min old).
+      try {
+        const c = JSON.parse(sessionStorage.getItem('live:' + id) || 'null');
+        if (c && Date.now() - c.at < 30 * 60 * 1000) live = c.live;
+      } catch { /* ignore */ }
+    }
+    if (!stillHere()) return;
 
     if (snap) { drawDetail(snap, live || false); return; }
     if (live && live.Data) {
