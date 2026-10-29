@@ -18,4 +18,7 @@ window.SITE_CONFIG = {
 
   // Rows rendered per "page" while scrolling.
   pageSize: 60,
+
+  // Join codes (cfx.re/join/<code>) of servers pinned in a banner at the top of "All servers".
+  pinnedServers: ['zjv8ko4'], // B-Zone V Romania
 };

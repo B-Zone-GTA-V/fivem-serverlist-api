@@ -8,12 +8,15 @@
     liveServerApi: 'https://frontend.cfx-services.net/api/servers/single/',
     iconUrl: (id, v) => `https://servers-live.fivem.net/servers/icon/${id}/${v}.png`,
     pageSize: 60,
+    pinnedServers: [],
   }, window.SITE_CONFIG || {});
 
   const $app = document.getElementById('app');
   const $totals = document.getElementById('totals');
   const $updated = document.getElementById('updatedAt');
   document.getElementById('brandName').textContent = CFG.name;
+  const $footBrand = document.getElementById('footBrand');
+  if ($footBrand) $footBrand.textContent = CFG.name;
 
   // ---------------------------------------------------------------- helpers
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,6 +36,15 @@
   }
 
   const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : '');
+
+  // Vars that are engine settings rather than owner-provided details.
+  const HIDDEN_VARS = /^(sv_|onesync|gamename|locale|tags|premium|banner_|icon_url|peak_players|txAdmin|activitypub|game_build|gametype|mapname|enhancedHostSupport)/i;
+  function linkify(v) {
+    v = String(v).trim();
+    if (/^https?:\/\/\S+$/i.test(v)) return `<a href="${esc(v)}" target="_blank" rel="noopener nofollow" style="color:var(--accent)">${esc(v.replace(/^https?:\/\//, ''))}</a>`;
+    if (/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v)) return `<a href="https://${esc(v)}" target="_blank" rel="noopener nofollow" style="color:var(--accent)">${esc(v)}</a>`;
+    return colorize(v);
+  }
 
   const regionNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; } })();
   const langNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'language' }); } catch { return null; } })();
@@ -57,11 +69,11 @@
     back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18 9 12l6-6"/></svg>',
     filter: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>',
     play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>',
+    pin: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>',
     globe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 2.5 15 0 18M12 3c-2.5 3-2.5 15 0 18"/></svg>',
   };
 
   const PREMIUM = { pt: 'Platinum', au: 'Gold', ag: 'Silver' };
-  const PREMIUM_RANK = { pt: 3, au: 2, ag: 1 };
 
   // ------------------------------------------------------------------ data
   let ALL = [];
@@ -114,7 +126,7 @@
     return {
       view: 'list',
       state: {
-        list: ['all', 'supporters', 'favorites'].includes(p.get('list')) ? p.get('list') : 'all',
+        list: ['all', 'favorites'].includes(p.get('list')) ? p.get('list') : 'all',
         game: p.get('game') === 'redm' ? 'redm' : (p.get('game') === 'fivem' ? 'fivem' : state.game),
         q: p.get('q') || '',
         sort: ['players', 'boosts', 'name', 'country'].includes(p.get('sort')) ? p.get('sort') : 'players',
@@ -174,7 +186,6 @@
 
   function baseSet() {
     let list = ALL.filter((s) => s.game === state.game);
-    if (state.list === 'supporters') list = list.filter((s) => s.premium);
     if (state.list === 'favorites') list = list.filter((s) => favorites.has(s.id));
     return list;
   }
@@ -228,10 +239,17 @@
   }
 
   // ------------------------------------------------------------- rendering
+  // CFX now publishes each server's icon as the `icon_url` var (cfx-server-metadata host).
+  // Older servers may still only have an iconVersion on the legacy icon CDN.
+  function iconSrc(s) {
+    return safeUrl(s.iconUrl) || (s.iconVersion ? CFG.iconUrl(s.id, s.iconVersion) : '');
+  }
+
   function iconHtml(s, cls = 'icon') {
     const letter = esc((s.plain.match(/[a-z0-9]/i) || ['?'])[0].toUpperCase());
-    if (!s.iconVersion) return `<div class="${cls}">${letter}</div>`;
-    return `<div class="${cls}" data-letter="${letter}"><img loading="lazy" alt="" src="${esc(CFG.iconUrl(s.id, s.iconVersion))}" onerror="this.parentNode.textContent=this.parentNode.dataset.letter"></div>`;
+    const src = iconSrc(s);
+    if (!src) return `<div class="${cls}">${letter}</div>`;
+    return `<div class="${cls}" data-letter="${letter}"><img loading="lazy" alt="" referrerpolicy="no-referrer" src="${esc(src)}" onerror="this.parentNode.textContent=this.parentNode.dataset.letter"></div>`;
   }
 
   function rowHtml(s) {
@@ -256,27 +274,37 @@
     </a>`;
   }
 
-  function featuredHtml(list) {
-    const picks = list
-      .filter((s) => s.premium && s.clients > 0)
-      .sort((a, b) => (PREMIUM_RANK[b.premium] || 0) - (PREMIUM_RANK[a.premium] || 0) || !!b.bannerDetail - !!a.bannerDetail || b.clients - a.clients)
-      .slice(0, 10)
-      .sort((a, b) => b.clients - a.clients);
-    if (!picks.length) return '';
-    return `<section class="featured">
-      <div class="featured-head"><h2>Featured supporters</h2><small>Servers backing the platform</small></div>
-      <div class="featured-row">${picks.map((s) => {
-        const banner = safeUrl(s.bannerDetail) || safeUrl(s.bannerConnecting);
-        const iconSrc = s.iconVersion ? CFG.iconUrl(s.id, s.iconVersion) : '';
-        const bg = banner ? `<img class="bg" src="${esc(banner)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">`
-          : iconSrc ? `<img class="bg blur" src="${esc(iconSrc)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">` : '';
-        return `<a class="fcard" href="#/servers/detail/${encodeURIComponent(s.id)}">
-          ${bg}<span class="badge ${esc(s.premium)}">${PREMIUM[s.premium] || ''}</span>
-          <div class="body">${iconHtml(s)}<div style="min-width:0">
-            <div class="name">${colorize(s.projectName || s.hostname)}</div>
-            <div class="meta">${flag(s.country)}<span>${ICON.user} ${fmt(s.clients)} / ${fmt(s.maxClients)}</span>${s.upvotePower ? `<span>${ICON.rocket} ${fmt(s.upvotePower)}</span>` : ''}</div>
-          </div></div></a>`;
-      }).join('')}</div></section>`;
+  // Pinned project banner(s) — always first on "All servers", whatever the sort or filters.
+  function renderPinned() {
+    const $p = document.getElementById('pinned');
+    if (!$p) return;
+    const ids = state.list === 'all' ? (CFG.pinnedServers || []) : [];
+    $p.innerHTML = ids.map((id) => BY_ID.get(id)).filter(Boolean).map((s) => {
+      const banner = safeUrl(s.bannerDetail) || safeUrl(s.bannerConnecting);
+      const icon = iconSrc(s);
+      const pct = s.maxClients ? Math.min(100, (s.clients / s.maxClients) * 100) : 0;
+      const bg = banner ? `<img class="pin-bg" src="${esc(banner)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`
+        : icon ? `<img class="pin-bg blur" src="${esc(icon)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
+      const join = `cfx.re/join/${s.id}`;
+      return `<a class="pinned" href="#/servers/detail/${encodeURIComponent(s.id)}">
+        ${bg}<div class="pin-shade"></div>
+        <span class="pin-label">${ICON.pin} Pinned</span>
+        <div class="pin-body">
+          ${iconHtml(s)}
+          <div class="pin-text">
+            <div class="pin-name">${s.premium && PREMIUM[s.premium] ? `<span class="badge ${esc(s.premium)}">${PREMIUM[s.premium]}</span>` : ''}<span>${colorize(s.projectName || s.hostname)}</span></div>
+            ${s.projectDesc ? `<div class="pin-desc">${colorize(s.projectDesc)}</div>` : ''}
+            <div class="pin-meta">
+              <span>${flag(s.country)} ${esc(s.country ? countryName(s.country) : 'Unknown')}</span>
+              <span>${ICON.user} <b>${fmt(s.clients)}</b> / ${fmt(s.maxClients)}</span>
+              ${s.upvotePower ? `<span class="boost">${ICON.rocket} ${fmt(s.upvotePower)}</span>` : ''}
+            </div>
+            <div class="bar"><i class="${s.full ? 'full' : ''}" style="width:${pct.toFixed(1)}%"></i></div>
+          </div>
+          <span class="btn primary pin-connect" data-connect="${s.game === 'redm' ? 'redm' : 'fivem'}://connect/${esc(join)}">${ICON.play} Connect</span>
+        </div>
+      </a>`;
+    }).join('');
   }
 
   let currentList = [];
@@ -316,8 +344,8 @@
             </label>
             <button class="btn filters-btn" id="openFilters">${ICON.filter} Filters</button>
           </div>
+          <div id="pinned"></div>
           <div class="active-filters" id="activeFilters"></div>
-          <div id="featured"></div>
           <div class="list">
             <div class="list-head">
               <span></span>
@@ -363,6 +391,8 @@
   }
 
   function onListClick(e) {
+    const con = e.target.closest('[data-connect]');
+    if (con) { e.preventDefault(); e.stopPropagation(); location.href = con.dataset.connect; return; }
     const fav = e.target.closest('[data-fav]');
     if (fav) {
       e.preventDefault(); e.stopPropagation();
@@ -455,16 +485,14 @@
     facetBase = baseSet();
     currentList = sortList(applyFilters(facetBase));
 
-    const pristine = state.list === 'all' && !state.q && !state.country.length && !state.tag.length && !state.lang.length;
-    document.getElementById('featured').innerHTML = pristine ? featuredHtml(facetBase) : '';
-
     const prev = shown;
     shown = 0;
     document.getElementById('rows').innerHTML = '';
     renderMore(keepCount ? Math.max(prev, CFG.pageSize) : CFG.pageSize);
     renderFacets();
     renderActiveFilters();
-    document.title = `${state.list === 'supporters' ? 'Supporters' : state.list === 'favorites' ? 'Favorites' : 'Servers'} · ${CFG.name}`;
+    renderPinned();
+    document.title = `${state.list === 'favorites' ? 'Favorites' : 'Servers'} · ${CFG.name}`;
   }
 
   function renderMore(count = CFG.pageSize) {
@@ -491,7 +519,7 @@
     const list = ALL.filter((s) => s.game === state.game);
     const players = list.reduce((n, s) => n + s.clients, 0);
     $totals.innerHTML = `<span><b>${fmt(players)}</b> players</span><span><b>${fmt(list.length)}</b> servers</span>`;
-    $updated.textContent = updatedAt ? `Data updated ${updatedAt.toLocaleString()}` : '';
+    if ($updated) $updated.textContent = updatedAt ? `Data updated ${updatedAt.toLocaleString()}` : '';
   }
 
   // ---------------------------------------------------------------- detail
@@ -522,12 +550,13 @@
     const name = vars.sv_projectName || s.projectName || d.hostname || s.hostname;
     const desc = vars.sv_projectDesc || s.projectDesc || (s.projectName ? stripCodes(s.hostname) : '');
     const banner = safeUrl(vars.banner_detail) || safeUrl(s.bannerDetail) || safeUrl(vars.banner_connecting) || safeUrl(s.bannerConnecting);
-    const iconSrc = s.iconVersion ? CFG.iconUrl(s.id, s.iconVersion) : '';
+    if (safeUrl(vars.icon_url)) s = { ...s, iconUrl: vars.icon_url };
+    const icon = iconSrc(s);
     const tags = s.tagList;
+    const peak = parseInt(vars.peak_players, 10) || s.peakPlayers || 0;
     const fav = favorites.has(s.id);
     const scheme = s.game === 'redm' ? 'redm' : 'fivem';
     const joinCode = `cfx.re/join/${s.id}`;
-    const players = Array.isArray(d.players) ? d.players.slice().sort((a, b) => (a.id || 0) - (b.id || 0)) : null;
     const resources = Array.isArray(d.resources) ? d.resources.slice().sort() : null;
     document.title = `${stripCodes(name)} · ${CFG.name}`;
 
@@ -542,16 +571,27 @@
       ['Pure level', esc(vars.sv_pureLevel || s.pureLevel || '0')],
       ['Resources', fmt(resources ? resources.length : s.resourceCount)],
       ['Server', esc(d.server || s.serverVersion || '—')],
-      d.ownerName ? ['Owner', d.ownerProfile && safeUrl(d.ownerProfile) ? `<a href="${esc(d.ownerProfile)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(d.ownerName)}</a>` : esc(d.ownerName)] : null,
-      (vars.Discord || vars.discord || s.discord) ? ['Discord', esc(vars.Discord || vars.discord || s.discord)] : null,
+      vars.sv_enforceSteamAuth === 'true' ? ['Steam required', 'Yes'] : null,
     ].filter(Boolean);
+
+    // Custom vars the owner publishes (Website, Discord, Instagram, Uptime, …), like the official "Details" box.
+    const details = Object.entries(vars)
+      .filter(([k, v]) => v && !HIDDEN_VARS.test(k) && String(v).length < 300)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => [k.replace(/_/g, ' '), linkify(v)]);
+    if (!details.length && s.discord) details.push(['Discord', linkify(s.discord)]);
+
+    const owner = d.ownerName ? `<div class="owner">
+        ${safeUrl(d.ownerAvatar) ? `<img src="${esc(d.ownerAvatar)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+        ${safeUrl(d.ownerProfile) ? `<a href="${esc(d.ownerProfile)}" target="_blank" rel="noopener">${esc(d.ownerName)}</a>` : `<span>${esc(d.ownerName)}</span>`}
+      </div>` : '';
 
     $app.innerHTML = `<div class="detail">
       <a class="back" href="#/">${ICON.back} All servers</a>
       <div class="hero">
         <div style="overflow:hidden;position:relative">
           ${banner ? `<div class="banner"><img src="${esc(banner)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentNode.classList.add('blur');this.remove()"></div>`
-            : `<div class="banner blur">${iconSrc ? `<img src="${esc(iconSrc)}" alt="" style="width:100%;height:100%;object-fit:cover">` : ''}</div>`}
+            : `<div class="banner blur">${icon ? `<img src="${esc(icon)}" alt="" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover">` : ''}</div>`}
           <div class="shade"></div>
         </div>
         <div class="head">
@@ -572,21 +612,17 @@
         <div>
           <div class="stats">
             <div class="stat"><div class="k">Players</div><div class="v">${fmt(clients)}<small style="color:var(--text-3);font-weight:400;font-size:14px">/ ${fmt(max)}</small></div></div>
+            <div class="stat"><div class="k">Peak (24h)</div><div class="v">${peak ? fmt(peak) : '—'}</div></div>
             <div class="stat"><div class="k">Boosts</div><div class="v" style="color:${s.upvotePower ? 'var(--accent)' : 'inherit'}">${ICON.rocket} ${fmt(d.upvotePower ?? s.upvotePower)}</div></div>
             <div class="stat"><div class="k">Country</div><div class="v" style="font-size:16px">${flag(s.country)} ${esc(s.country ? countryName(s.country) : 'Unknown')}</div></div>
-            <div class="stat"><div class="k">Resources</div><div class="v">${fmt(resources ? resources.length : s.resourceCount)}</div></div>
           </div>
 
           ${tags.length ? `<div class="section"><h2>Tags</h2><div class="res-list">${tags.map((t) => `<a class="chip" href="#/?tag=${encodeURIComponent(t)}${s.game === 'redm' ? '&game=redm' : ''}">${esc(t)}</a>`).join('')}</div></div>` : ''}
 
-          <div class="section"><h2>Players <span class="n">${players ? fmt(players.length) : ''}</span></h2>
-            <div id="playersBox">${players
-              ? (players.length ? `<div class="player-list">${players.map((p) => `<div class="player"><span class="pn">${esc(p.name)}</span><span class="pp">${fmt(p.ping)} ms</span></div>`).join('')}</div>` : '<div class="note">Nobody is online right now.</div>')
-              : live === false ? '<div class="note">The live player list could not be loaded from this site (the CFX API blocked the request). Player counts above come from the latest snapshot.</div>'
-              : '<div class="skeleton" style="width:60%"></div>'}</div>
-          </div>
+          ${live === undefined || live === null ? '<div class="section"><div class="skeleton" style="width:50%"></div></div>' : ''}
+          ${live === false ? '<div class="section note">Live details (resources, owner, links) could not be loaded right now. Showing the latest snapshot.</div>' : ''}
 
-          ${resources && resources.length ? `<div class="section"><h2>Resources <span class="n">${fmt(resources.length)}</span></h2><div class="res-list">${resources.map((r) => `<span class="chip">${esc(r)}</span>`).join('')}</div></div>` : ''}
+          ${resources && resources.length ? `<div class="section"><h2>Resources <span class="n">${fmt(resources.length)}</span></h2><div class="res-list" id="resList">${resources.map((r, i) => `<span class="chip"${i >= 24 ? ' hidden' : ''}>${esc(r)}</span>`).join('')}${resources.length > 24 ? `<button class="chip show-all" id="showAllRes">Show all ${fmt(resources.length)}</button>` : ''}</div></div>` : ''}
         </div>
 
         <aside>
@@ -596,6 +632,11 @@
             <div class="connect-box"><code>connect ${esc(joinCode)}</code><button id="copyBtn">Copy</button></div>
             <a class="btn" style="width:100%;justify-content:center;margin-top:10px" href="https://${esc(joinCode)}" target="_blank" rel="noopener">Open ${esc(joinCode)}</a>
           </div>
+          ${owner || details.length ? `<div class="panel" style="margin-top:14px">
+            <h3>Details</h3>
+            ${owner}
+            ${details.length ? `<div class="kv">${details.map(([k, v]) => `<div><span>${esc(k)}</span><span>${v}</span></div>`).join('')}</div>` : ''}
+          </div>` : ''}
           <div class="panel" style="margin-top:14px">
             <h3>Server info</h3>
             <div class="kv">${info.map(([k, v]) => `<div><span>${k}</span><span>${v}</span></div>`).join('')}</div>
@@ -608,6 +649,10 @@
       toggleFav(s.id);
       const on = favorites.has(s.id);
       e.currentTarget.innerHTML = `${on ? ICON.star : ICON.starO} ${on ? 'Favorited' : 'Favorite'}`;
+    });
+    document.getElementById('showAllRes')?.addEventListener('click', (e) => {
+      document.querySelectorAll('#resList [hidden]').forEach((el) => (el.hidden = false));
+      e.currentTarget.remove();
     });
     document.getElementById('copyBtn').addEventListener('click', (e) => {
       const btn = e.currentTarget;
@@ -636,7 +681,7 @@
       const s = {
         id, hostname: d.hostname || id, projectName: v.sv_projectName || '', projectDesc: v.sv_projectDesc || '',
         clients: d.clients || 0, maxClients: d.svMaxclients || d.sv_maxclients || 0, locale: v.locale || '',
-        tags: v.tags || '', iconVersion: d.iconVersion || 0, upvotePower: d.upvotePower || 0, premium: v.premium || '',
+        tags: v.tags || '', iconVersion: d.iconVersion || 0, iconUrl: v.icon_url || '', peakPlayers: parseInt(v.peak_players, 10) || 0, upvotePower: d.upvotePower || 0, premium: v.premium || '',
         game: v.gamename === 'rdr3' ? 'redm' : 'fivem', resourceCount: (d.resources || []).length,
       };
       s.plain = stripCodes(s.projectName || s.hostname);

@@ -23,7 +23,6 @@
       </a>
       <nav class="tabs" id="tabs">
         <a href="#/?list=all" data-list="all">All servers</a>
-        <a href="#/?list=supporters" data-list="supporters">Supporters</a>
         <a href="#/?list=favorites" data-list="favorites">Favorites</a>
       </nav>
       <div class="game-switch" id="gameSwitch" role="group" aria-label="Game">
@@ -41,9 +40,20 @@
     </div>
   </main>
 
-  <footer class="footer">
-    <span id="updatedAt"></span>
-    <span>Unofficial server browser. Not affiliated with Cfx.re or Rockstar Games.</span>
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <div class="foot-about">
+        <div class="foot-brand"><img src="assets/logo.svg" alt="" width="22" height="22"><span id="footBrand">Masterlist</span></div>
+        <p>A fast, open-source browser for every FiveM and RedM server. The list refreshes automatically every few minutes, sorted by live player count, with filters for country, language and tags.</p>
+        <p>Built on a fork of the open-source <a href="https://github.com/Zuntie/fivem-serverlist-api" target="_blank" rel="noopener">fivem-serverlist-api</a> by Zuntie, which reads the public Cfx.re server stream.</p>
+      </div>
+      <div class="foot-links">
+        <h4>Links</h4>
+        <a href="https://servers.fivem.net" target="_blank" rel="noopener">Official FiveM server list ↗</a>
+        <a href="https://github.com/Zuntie/fivem-serverlist-api" target="_blank" rel="noopener">fivem-serverlist-api on GitHub ↗</a>
+        <a href="https://fivem.net" target="_blank" rel="noopener">Download FiveM ↗</a>
+      </div>
+    </div>
   </footer>
 
   <script src="config.js"></script>

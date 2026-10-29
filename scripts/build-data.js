@@ -23,6 +23,7 @@ const FIELDS = [
   'game', 'gametype', 'mapname', 'bannerDetail', 'bannerConnecting',
   'gameBuild', 'onesync', 'enhancedHostSupport', 'resourceCount', 'serverVersion',
   'discord', 'pureLevel', 'scriptHookAllowed', 'private',
+  'iconUrl', 'peakPlayers',
 ];
 
 const clip = (s, n) => {
@@ -103,6 +104,9 @@ function toRow(srv) {
     pureLevel: clip(v.sv_pureLevel, 2),
     scriptHookAllowed: truthy(v.sv_scriptHookAllowed) ? 1 : 0,
     private: truthy(v.sv_private) ? 1 : 0,
+    // CFX now hosts server icons on cfx-server-metadata and passes the URL as a var.
+    iconUrl: safeUrl(v.icon_url),
+    peakPlayers: parseInt(v.peak_players, 10) || 0,
   };
 
   return FIELDS.map((f) => row[f]);

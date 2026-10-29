@@ -20,7 +20,7 @@ For any legal questions or concerns regarding this project or its usage, please 
 
 ## Masterlist website (GitHub Pages)
 
-`site/` is a static clone of the FiveM server browser: every server sorted by player count (ties broken by boosts, then name), country / language / tag filters, search, featured supporters with banners, server icons, favorites, and a detail page per server with connect button, players and resources.
+`site/` is a static clone of the FiveM server browser: every server sorted by player count (ties broken by boosts, then name), country / language / tag filters, search, server icons, favorites, and a detail page per server with banner, connect button, owner details and resources.
 
 ### How it works
 - `scripts/build-data.js` reads the CFX server stream with the same decoder the API uses (`cfx/master.js` + `FrameReader`) and writes a compact snapshot to `site/data/servers.json`.
