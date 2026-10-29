@@ -28,6 +28,13 @@ For any legal questions or concerns regarding this project or its usage, please 
 - In the browser, the site then loads the full list live from Cfx.re (the same stream the official site uses), decoded in a Web Worker (`site/assets/live-worker.js`). The snapshot is shown first and is the fallback if Cfx.re refuses. Turn this off with `liveList: false` in `site/config.js`.
 - The detail page also asks the live CFX API for the player list. If the browser blocks that request, it shows the snapshot data instead.
 
+### Server statistics
+Each server page has a **Statistics** panel with average and peak players for the last 24 hours, 48 hours, 1 week, 1 month and 1 year, plus a chart and insights: prime-time average, busiest hour and weekday, growth vs. the previous week, slots usage and 30-day uptime.
+- Every build run (`scripts/build-data.js`) records one player-count sample per online server via `scripts/history.js`.
+- Data is kept in hourly buckets for 14 days and daily buckets for a year (plus a count of collection runs, used for uptime), stored in `site/data/history/<shard>.json` (256 shards; a server page loads only its own shard).
+- Between runs the history lives in the Actions cache (see `pages.yml`). If the cache is ever empty, it is restored from the published site.
+- Stats only cover the time since tracking started, so 1 month / 1 year fill in gradually.
+
 ### Deploy
 1. Push this repo to GitHub.
 2. Go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.

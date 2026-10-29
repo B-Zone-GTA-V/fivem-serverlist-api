@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
+    # Every 10 minutes (GitHub may delay scheduled runs). Each run also records one
+    # player-count sample per server for the Statistics panel.
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
@@ -19,26 +21,49 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
+
       - id: pages
         uses: actions/configure-pages@v5
+
+      # Player-count history (site/data/history) is kept between runs in the Actions cache.
+      # Restores the newest saved copy now and saves an updated copy when the job ends.
+      - name: Restore statistics history
+        uses: actions/cache@v4
+        with:
+          path: site/data/history
+          key: history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: history-
+
       - name: Fetch server list snapshot
         id: data
         continue-on-error: true
+        env:
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: node scripts/build-data.js site/data/servers.json
+
+      # If CFX is unreachable this run, re-publish the last good snapshot instead of failing.
       - name: Reuse previous snapshot
         if: steps.data.outcome != 'success'
+        env:
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           mkdir -p site/data
           curl -fsSL "${{ steps.pages.outputs.base_url }}/data/servers.json" -o site/data/servers.json \
             || { echo "::error::No fresh data and no previous snapshot available"; exit 1; }
+          # keep the published statistics history if the cache was empty
+          [ -d site/data/history ] || node -e "require('./scripts/history').restoreFromPages()"
+          node scripts/stamp-assets.js
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

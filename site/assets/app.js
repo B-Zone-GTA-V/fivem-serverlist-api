@@ -73,6 +73,7 @@
     filter: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>',
     play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>',
     pin: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>',
+    chart: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></svg>',
     globe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 2.5 15 0 18M12 3c-2.5 3-2.5 15 0 18"/></svg>',
   };
 
@@ -692,6 +693,8 @@
             <div class="stat"><div class="k">Country</div><div class="v" style="font-size:16px">${flag(s.country)} ${esc(s.country ? countryName(s.country) : 'Unknown')}</div></div>
           </div>
 
+          <div class="section stats-panel" id="statsBox"></div>
+
           ${tags.length ? `<div class="section"><h2>Tags</h2><div class="res-list">${tags.map((t) => `<a class="chip" href="#/?tag=${encodeURIComponent(t)}${s.game === 'redm' ? '&game=redm' : ''}">${esc(t)}</a>`).join('')}</div></div>` : ''}
 
           ${live === undefined || live === null ? '<div class="section"><div class="skeleton" style="width:50%"></div></div>' : ''}
@@ -725,6 +728,7 @@
       const on = favorites.has(s.id);
       e.currentTarget.innerHTML = `${on ? ICON.star : ICON.starO} ${on ? 'Favorited' : 'Favorite'}`;
     });
+    renderStats(s.id, max, serverTz(s));
     document.getElementById('retryLive')?.addEventListener('click', () => { drawDetail(s, null); loadLive(s.id, BY_ID.get(s.id) || null); });
     document.getElementById('showAllRes')?.addEventListener('click', (e) => {
       document.querySelectorAll('#resList [hidden]').forEach((el) => (el.hidden = false));
@@ -734,6 +738,276 @@
       const btn = e.currentTarget;
       navigator.clipboard?.writeText(`connect ${joinCode}`).then(() => { btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy'), 1500); }, () => {});
     });
+  }
+
+  // ------------------------------------------------------------- server time zones
+  // Statistics use the server's own clock (from its country), so everyone sees the same
+  // prime time / busiest hour / weekday. Countries with several zones use the main one.
+  const COUNTRY_TZ = {
+    RO: 'Europe/Bucharest', MD: 'Europe/Chisinau', DE: 'Europe/Berlin', FR: 'Europe/Paris', GB: 'Europe/London', IE: 'Europe/Dublin',
+    NL: 'Europe/Amsterdam', BE: 'Europe/Brussels', LU: 'Europe/Luxembourg', ES: 'Europe/Madrid', PT: 'Europe/Lisbon', IT: 'Europe/Rome',
+    CH: 'Europe/Zurich', AT: 'Europe/Vienna', PL: 'Europe/Warsaw', CZ: 'Europe/Prague', SK: 'Europe/Bratislava', HU: 'Europe/Budapest',
+    SI: 'Europe/Ljubljana', HR: 'Europe/Zagreb', RS: 'Europe/Belgrade', BA: 'Europe/Sarajevo', ME: 'Europe/Podgorica', MK: 'Europe/Skopje',
+    AL: 'Europe/Tirane', XK: 'Europe/Belgrade', BG: 'Europe/Sofia', GR: 'Europe/Athens', CY: 'Asia/Nicosia', TR: 'Europe/Istanbul',
+    UA: 'Europe/Kyiv', BY: 'Europe/Minsk', RU: 'Europe/Moscow', LT: 'Europe/Vilnius', LV: 'Europe/Riga', EE: 'Europe/Tallinn',
+    FI: 'Europe/Helsinki', SE: 'Europe/Stockholm', NO: 'Europe/Oslo', DK: 'Europe/Copenhagen', IS: 'Atlantic/Reykjavik', MT: 'Europe/Malta',
+    GE: 'Asia/Tbilisi', AM: 'Asia/Yerevan', AZ: 'Asia/Baku', KZ: 'Asia/Almaty', IL: 'Asia/Jerusalem', PS: 'Asia/Gaza', LB: 'Asia/Beirut',
+    JO: 'Asia/Amman', SY: 'Asia/Damascus', IQ: 'Asia/Baghdad', SA: 'Asia/Riyadh', AE: 'Asia/Dubai', QA: 'Asia/Qatar', KW: 'Asia/Kuwait',
+    BH: 'Asia/Bahrain', OM: 'Asia/Muscat', YE: 'Asia/Aden', IR: 'Asia/Tehran', EG: 'Africa/Cairo', LY: 'Africa/Tripoli', TN: 'Africa/Tunis',
+    DZ: 'Africa/Algiers', MA: 'Africa/Casablanca', ZA: 'Africa/Johannesburg', NG: 'Africa/Lagos', KE: 'Africa/Nairobi', IN: 'Asia/Kolkata',
+    PK: 'Asia/Karachi', BD: 'Asia/Dhaka', TH: 'Asia/Bangkok', VN: 'Asia/Ho_Chi_Minh', MY: 'Asia/Kuala_Lumpur', SG: 'Asia/Singapore',
+    ID: 'Asia/Jakarta', PH: 'Asia/Manila', CN: 'Asia/Shanghai', HK: 'Asia/Hong_Kong', TW: 'Asia/Taipei', JP: 'Asia/Tokyo', KR: 'Asia/Seoul',
+    AU: 'Australia/Sydney', NZ: 'Pacific/Auckland', US: 'America/New_York', CA: 'America/Toronto', MX: 'America/Mexico_City',
+    BR: 'America/Sao_Paulo', AR: 'America/Argentina/Buenos_Aires', CL: 'America/Santiago', CO: 'America/Bogota', PE: 'America/Lima',
+    VE: 'America/Caracas', UY: 'America/Montevideo', PY: 'America/Asuncion', BO: 'America/La_Paz', EC: 'America/Guayaquil',
+    DO: 'America/Santo_Domingo', PR: 'America/Puerto_Rico', CR: 'America/Costa_Rica', PA: 'America/Panama', GT: 'America/Guatemala',
+  };
+  function serverTz(s) {
+    const cc = s && s.country;
+    let tz = cc && COUNTRY_TZ[cc];
+    if (!tz && cc) {
+      try { const z = new Intl.Locale('und-' + cc).getTimeZones?.() || new Intl.Locale('und-' + cc).timeZones; if (z && z.length) tz = z[0]; } catch { /* ignore */ }
+    }
+    try { if (tz) { new Intl.DateTimeFormat('en', { timeZone: tz }); return tz; } } catch { /* invalid zone */ }
+    return 'UTC';
+  }
+  const zoneFmt = new Map();
+  function zoned(t, tz) { // hour (0-23) and weekday (0=Sun) of timestamp t in zone tz
+    if (!zoneFmt.has(tz)) zoneFmt.set(tz, new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', hour: 'numeric', weekday: 'short' }));
+    const parts = zoneFmt.get(tz).formatToParts(new Date(t));
+    const hour = +parts.find((p) => p.type === 'hour').value % 24;
+    const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.find((p) => p.type === 'weekday').value);
+    return { hour, wd };
+  }
+  function tzLabel(tz) {
+    try {
+      const n = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName');
+      return n ? n.value.replace('GMT', 'UTC') : tz;
+    } catch { return tz; }
+  }
+
+  // ------------------------------------------------------------- statistics
+  // History shards are written by scripts/history.js (same hash, same layout).
+  const STATS_SHARDS = 256;
+  const H_LEN = 336, D_LEN = 366;
+  function shardOf(id) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return ((h >>> 0) % STATS_SHARDS).toString(16).padStart(2, '0');
+  }
+  const RANGES = [
+    { key: '24h', label: '24 hours', unit: 'h', n: 24 },
+    { key: '48h', label: '48 hours', unit: 'h', n: 48 },
+    { key: '1w', label: '1 week', unit: 'h', n: 168 },
+    { key: '1m', label: '1 month', unit: 'd', n: 30 },
+    { key: '1y', label: '1 year', unit: 'd', n: 366 },
+  ];
+  const statsCache = new Map();
+  let statsRange = store.get('statsRange', '24h');
+
+  async function getHistory(id) {
+    const c = statsCache.get(id);
+    if (c && Date.now() - c.at < 120000) return c;
+    try {
+      const res = await fetch(`data/history/${shardOf(id)}.json`, { cache: 'no-cache' });
+      const json = res.ok ? await res.json() : null;
+      const r = json && json.s && json.s[id];
+      const out = { at: Date.now(), entry: r || null, json };
+      statsCache.set(id, out);
+      return out;
+    } catch { return { at: Date.now(), entry: null }; }
+  }
+
+  // Expand one server's trimmed arrays into full timelines of buckets.
+  function timeline(h, unit) {
+    const e = h.entry, j = h.json;
+    const hourly = unit === 'h';
+    const fileLen = hourly ? (j.v >= 2 ? 336 : 168) : D_LEN;
+    const len = hourly ? H_LEN : D_LEN;
+    const base = (hourly ? j.hb : j.db) + fileLen - len; // align so the last bucket is "now"
+    const start = hourly ? e.h0 : e.d0;
+    const S = hourly ? e.hs : e.ds, P = hourly ? e.hp : e.dp, N = hourly ? e.hn : e.dn;
+    const runs = hourly ? j.hr : j.dr, r0 = hourly ? (j.hr0 || 0) : (j.dr0 || 0);
+    const step = hourly ? 3600000 : 86400000;
+    const off = fileLen - len;
+    const out = [];
+    for (let i = 0; i < len; i++) {
+      const fi = i + off, k = fi - start, rk = fi - r0;
+      const n = k >= 0 && k < (N || []).length ? N[k] || 0 : 0;
+      out.push({
+        t: (base + i) * step, n,
+        sum: n ? S[k] : 0, peak: n ? P[k] : null, avg: n ? S[k] / n : null,
+        runs: runs && rk >= 0 && rk < runs.length ? runs[rk] || 0 : 0,
+      });
+    }
+    return out;
+  }
+
+  const agg = (pts) => pts.reduce((a, p) => ({ sum: a.sum + p.sum, n: a.n + p.n, peak: Math.max(a.peak, p.peak || 0) }), { sum: 0, n: 0, peak: 0 });
+  const avgOf = (pts) => { const a = agg(pts); return a.n ? a.sum / a.n : null; };
+
+  function insights(h, maxSlots, tz) {
+    const hours = timeline(h, 'h');              // 14 days, hourly
+    const days = timeline(h, 'd');               // 366 days, daily
+    const week = hours.slice(-168), prevWeek = hours.slice(-336, -168), twoWeeks = hours;
+    // prime time: 18:00–23:59 in the server's time zone, last 7 days
+    const prime = avgOf(week.filter((p) => zoned(p.t, tz).hour >= 18));
+    // busiest hour of day / weekday over 2 weeks (server's time zone)
+    const byHour = Array.from({ length: 24 }, () => []), byDay = Array.from({ length: 7 }, () => []);
+    twoWeeks.forEach((p) => { if (p.n) { const z = zoned(p.t, tz); byHour[z.hour].push(p); byDay[z.wd].push(p); } });
+    const best = (groups) => { let bi = -1, bv = -1; groups.forEach((g, i) => { const v = avgOf(g); if (v !== null && v > bv) { bv = v; bi = i; } }); return bi; };
+    // Require enough history before naming a "busiest" hour/day — a few hours of data
+    // would just name the hour tracking started.
+    const coveredHours = twoWeeks.filter((p) => p.n);
+    const daysSpan = coveredHours.length ? (coveredHours[coveredHours.length - 1].t - coveredHours[0].t) / 86400000 : 0;
+    const hoursOfDay = byHour.filter((g) => g.length).length;
+    const weekdays = byDay.filter((g) => g.length).length;
+    const bh = daysSpan >= 3 && hoursOfDay >= 20 ? best(byHour) : -1;
+    const bd = weekdays === 7 ? best(byDay) : -1;
+    const primeDays = new Set(week.filter((p) => p.n && zoned(p.t, tz).hour >= 18).map((p) => Math.floor(p.t / 86400000))).size;
+    // growth: last 7 days vs the 7 days before
+    const a = avgOf(week), b = avgOf(prevWeek);
+    const enoughPrev = prevWeek.filter((p) => p.n).length >= 24 && week.filter((p) => p.n).length >= 24;
+    const growth = a !== null && b ? ((a - b) / b) * 100 : null;
+    // slots usage: 7-day average / max slots
+    const slots = a !== null && maxSlots && week.filter((p) => p.n).length >= 6 ? (a / maxSlots) * 100 : null;
+    // uptime: samples where the server was listed / collection runs, last 30 days since tracking began
+    const firstDay = Math.floor(h.entry.first / 86400000) * 86400000;
+    const month = days.slice(-30).filter((p) => p.t >= firstDay && p.runs);
+    const up = month.reduce((x, p) => ({ n: x.n + Math.min(p.n, p.runs), r: x.r + p.runs }), { n: 0, r: 0 });
+    const uptime = up.r >= 12 ? (up.n / up.r) * 100 : null;
+    return { prime: primeDays >= 1 ? prime : null, bh, bd, growth: enoughPrev ? growth : null, slots, uptime, trackedDays: daysSpan };
+  }
+
+  const ICONS = {
+    prime: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 19c0-3 2.7-5 6-5s6 2 6 5zM14.5 14.2c.5-.1 1-.2 1.5-.2 3.3 0 6 2 6 5h-6.2c0-1.9-.5-3.5-1.3-4.8z"/></svg>',
+    time: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M5 3 2 6M19 3l3 3"/></svg>',
+    day: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><rect x="13" y="14" width="4" height="3" fill="currentColor" stroke="none"/></svg>',
+    growth: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>',
+    slots: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 13h3M8 16h6"/></svg>',
+    uptime: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg>',
+  };
+  const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  function insightCard(icon, color, value, label) {
+    return `<div class="insight"><span class="ic" style="background:${color}">${ICONS[icon]}</span><div><div class="iv">${value}</div><div class="il">${label}</div></div></div>`;
+  }
+
+  function insightsHtml(h, maxSlots, tz) {
+    const x = insights(h, maxSlots, tz);
+    const wait = (txt) => `<span class="na">Collecting…</span><span class="na-why">${txt}</span>`;
+    const pct = (v, sign, why) => (v === null || !isFinite(v) ? wait(why) : `${sign && v > 0 ? '+' : ''}${v.toFixed(2)}%`);
+    const hourLabel = x.bh < 0 ? wait('ready after ~3 days') : new Date(Date.UTC(2000, 0, 1, x.bh)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+    return `<div class="insights">
+      <div class="insight-col">
+        ${insightCard('prime', '#e8467c', x.prime === null ? wait('ready after the first evening (18:00)') : fmt(Math.round(x.prime)), 'Prime time player average<br><small>18:00–24:00 server time, last 7 days</small>')}
+        ${insightCard('time', '#a259d9', hourLabel, 'Most players time<br><small>Last 2 weeks</small>')}
+        ${insightCard('day', '#8bc34a', x.bd < 0 ? wait('ready after 7 days') : WEEKDAYS[x.bd], 'Most players weekday<br><small>Last 2 weeks</small>')}
+      </div>
+      <div class="insight-col">
+        ${insightCard('growth', '#ff6b3d', `<span class="${x.growth > 0 ? 'up' : x.growth < 0 ? 'down' : ''}">${pct(x.growth, true, 'ready after 8 days')}</span>`, 'Player count growth<br><small>Last 7 days vs. week before</small>')}
+        ${insightCard('slots', '#2fa8f0', pct(x.slots, false, 'ready after ~6 hours'), 'Slots usage<br><small>7-day average / max slots</small>')}
+        ${insightCard('uptime', '#26a69a', pct(x.uptime, false, 'ready after ~2 hours'), 'Server uptime<br><small>Last 30 days</small>')}
+      </div>
+    </div>`;
+  }
+
+  function chartSvg(pts, unit, tz) {
+    const W = 600, H = 220, PL = 4, PR = 4;
+    const top = Math.max(1, ...pts.map((p) => p.peak || 0));
+    const nice = (v) => { const m = Math.pow(10, Math.floor(Math.log10(v))); const f = v / m; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * m; };
+    const stepY = nice(top / 4), max = Math.ceil(top / stepY) * stepY || 1;
+    const x = (i) => (pts.length < 2 ? W / 2 : PL + (i * (W - PL - PR)) / (pts.length - 1));
+    const y = (v) => H - 8 - (v / max) * (H - 16);
+    const segs = (key) => {
+      const out = []; let cur = [];
+      pts.forEach((p, i) => { if (p[key] === null) { if (cur.length) out.push(cur); cur = []; } else cur.push([x(i), y(p[key])]); });
+      if (cur.length) out.push(cur);
+      return out;
+    };
+    const line = (key) => segs(key).map((sg) => (sg.length === 1 ? `M${sg[0][0] - 1.5},${sg[0][1]}L${sg[0][0] + 1.5},${sg[0][1]}` : 'M' + sg.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join('L'))).join('');
+    const dots = (key, cls) => (pts.length <= 72 ? pts.map((p, i) => (p[key] === null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(p[key]).toFixed(1)}" r="2.6" class="${cls}"/>`)).join('') : '');
+    const ticks = []; for (let v = stepY; v <= max + 1e-9; v += stepY) ticks.push(v);
+    const grid = ticks.map((v) => `<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" class="g"/>`).join('');
+    const labels = ticks.map((v) => `<span style="top:${(y(v) / H) * 100}%">${fmt(Math.round(v))}</span>`).join('');
+    const fmtT = (t) => (unit === 'h'
+      ? new Date(t).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz })
+      : new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' }));
+    return `<div class="chart-legend top"><span class="lg avg"></span>Average player count <span class="lg peak"></span>Peak player count</div>
+    <div class="chart" data-unit="${unit}" data-tz="${esc(tz)}">
+      <div class="chart-y">${labels}</div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${grid}
+        <path d="${line('avg')}" class="l avg"/><path d="${line('peak')}" class="l peak"/>
+        <line class="cursor" x1="0" x2="0" y1="0" y2="${H}" style="display:none"/>
+      </svg>
+      <svg class="dots" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${dots('avg', 'd-avg')}${dots('peak', 'd-peak')}</svg>
+      <div class="chart-tip" style="display:none"></div>
+      <div class="chart-x"><span>${esc(fmtT(pts[0].t))}</span>${pts.length > 4 ? `<span>${esc(fmtT(pts[Math.floor(pts.length / 2)].t))}</span>` : ''}<span>${unit === 'h' ? 'Now' : 'Today'}</span></div>
+      <script type="application/json">${JSON.stringify(pts.map((p) => [p.t, p.avg === null ? null : Math.round(p.avg), p.peak]))}</script>
+    </div>`;
+  }
+
+  async function renderStats(id, maxSlots, tz) {
+    const box = document.getElementById('statsBox');
+    if (!box) return;
+    const h = await getHistory(id);
+    if (!document.getElementById('statsBox') || parseHash().id !== id) return;
+    const head = `<h2>${ICON.chart} Statistics</h2><div class="range-tabs">${RANGES.map((r) => `<button data-range="${r.key}" class="${r.key === statsRange ? 'on' : ''}">${r.label}</button>`).join('')}</div>`;
+    if (!h.entry || !h.json) {
+      box.innerHTML = head + '<div class="note">No statistics for this server yet. History is recorded every time the list refreshes, so averages and peaks appear here once it has been online with players.</div>';
+    } else {
+      const r = RANGES.find((x) => x.key === statsRange) || RANGES[0];
+      let pts = timeline(h, r.unit).slice(-r.n);
+      const firstIdx = pts.findIndex((p) => p.n);
+      const clipped = firstIdx > 0;
+      if (clipped) pts = pts.slice(firstIdx); // tracking began inside this range: chart from that point
+      const tot = agg(pts);
+      const covered = pts.filter((p) => p.n).length;
+      const ago = Math.max(1, Math.round((Date.now() - h.entry.first) / 60000));
+      const agoTxt = ago < 90 ? `${ago} min` : ago < 2880 ? `${Math.round(ago / 60)} hours` : `${Math.round(ago / 1440)} days`;
+      const since = new Date(h.entry.first).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      const collecting = `<div class="collecting"><div class="spinner sm"></div><div><b>Collecting data for this server</b>
+        <span>Tracking started ${esc(agoTxt)} ago. A new sample is added every time the list updates (about every 10 minutes), so the ${r.unit === 'h' ? 'hourly' : 'daily'} chart fills in over time.</span></div></div>`;
+      box.innerHTML = head + (covered < 2 ? collecting + (tot.n ? `<div class="range-summary"><span>Average so far <b>${fmt(Math.round(tot.sum / tot.n))}</b></span><span>Peak so far <b>${fmt(tot.peak)}</b></span></div>` : '') : `
+        ${chartSvg(pts, r.unit, tz)}
+        <div class="range-summary">
+          <span>Average <b>${fmt(Math.round(tot.sum / tot.n))}</b></span><span>Peak <b>${fmt(tot.peak)}</b></span>
+          <span class="muted">Times in server time (${esc(tzLabel(tz))})</span>
+          ${clipped ? `<span class="muted">Tracked since ${esc(since)} — this range is still filling in</span>` : ''}
+        </div>`)
+        + insightsHtml(h, maxSlots, tz);
+    }
+    box.querySelectorAll('[data-range]').forEach((b) => b.addEventListener('click', () => {
+      statsRange = b.dataset.range; store.set('statsRange', statsRange); renderStats(id, maxSlots, tz);
+    }));
+    wireChart(box.querySelector('.chart'));
+  }
+
+  function wireChart(el) {
+    if (!el) return;
+    const data = JSON.parse(el.querySelector('script').textContent);
+    const tip = el.querySelector('.chart-tip'), cur = el.querySelector('.cursor'), svg = el.querySelector('svg');
+    const unit = el.dataset.unit, step = unit === 'h' ? 3600000 : 86400000, tz = el.dataset.tz || 'UTC';
+    const hm = (t) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+    const move = (clientX) => {
+      const rect = svg.getBoundingClientRect();
+      const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      const i = Math.round(f * (data.length - 1));
+      const [t, avg, peak] = data[i];
+      const x = data.length < 2 ? 300 : 4 + (i * 592) / (data.length - 1);
+      cur.setAttribute('x1', x); cur.setAttribute('x2', x); cur.style.display = '';
+      const when = unit === 'h'
+        ? `${new Date(t).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz })}, ${hm(t)} – ${hm(t + step)}`
+        : new Date(t).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+      tip.innerHTML = `<b>${esc(when)}</b>${avg === null ? '<span>No data</span>'
+        : `<span><i class="sq avg"></i>Average player count: <b>${fmt(avg)}</b></span><span><i class="sq peak"></i>Peak player count: <b>${fmt(peak)}</b></span>`}`;
+      tip.style.display = '';
+      const left = (x / 600) * rect.width;
+      tip.style.left = Math.min(Math.max(left, 110), rect.width - 110) + 'px';
+    };
+    svg.addEventListener('mousemove', (e) => move(e.clientX));
+    svg.addEventListener('touchmove', (e) => move(e.touches[0].clientX), { passive: true });
+    svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; cur.style.display = 'none'; });
   }
 
   let liveToken = 0;

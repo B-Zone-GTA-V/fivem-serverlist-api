@@ -137,6 +137,12 @@ async function main() {
   const players = rows.reduce((n, r) => n + r[iClients], 0);
   console.log(`Wrote ${rows.length} servers (${players} players) to ${OUT_FILE} (${(fs.statSync(OUT_FILE).size / 1e6).toFixed(1)} MB)`);
 
+  // Record this sample for the per-server statistics (average / peak over time).
+  if (process.env.HISTORY !== '0') {
+    try { await require('./history').recordHistory(rows, FIELDS); }
+    catch (e) { console.error('History update failed (site still deploys):', e); }
+  }
+
   // Bust browser caches for CSS/JS changed since the last deploy.
   require('./stamp-assets').stamp();
 }
