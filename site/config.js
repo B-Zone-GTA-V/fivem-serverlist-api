@@ -7,7 +7,7 @@ window.SITE_CONFIG = {
   dataUrl: 'data/servers.json',
 
   // How often an open tab re-downloads the snapshot (seconds).
-  refreshSeconds: 300,
+  refreshSeconds: 120,
 
   // Live single-server endpoint used on the detail page for players/resources.
   // If the browser blocks it (CORS), the page falls back to snapshot data.
@@ -21,4 +21,7 @@ window.SITE_CONFIG = {
 
   // Join codes (cfx.re/join/<code>) of servers pinned in a banner at the top of "All servers".
   pinnedServers: ['zjv8ko4'], // B-Zone V Romania
+
+  // Pinned servers ask Cfx.re for live player counts this often (seconds). 0 = off.
+  pinnedLiveSeconds: 60,
 };

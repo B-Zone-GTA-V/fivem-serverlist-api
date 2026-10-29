@@ -9,6 +9,7 @@
     iconUrl: (id, v) => `https://servers-live.fivem.net/servers/icon/${id}/${v}.png`,
     pageSize: 60,
     pinnedServers: [],
+    pinnedLiveSeconds: 60,
   }, window.SITE_CONFIG || {});
 
   const $app = document.getElementById('app');
@@ -102,6 +103,35 @@
     ALL = list;
     BY_ID = new Map(list.map((s) => [s.id, s]));
     updatedAt = json.updatedAt ? new Date(json.updatedAt) : null;
+    // Re-apply live numbers we fetched after this snapshot was built.
+    for (const [id, o] of LIVE) {
+      if (updatedAt && o.at < updatedAt.getTime()) { LIVE.delete(id); continue; }
+      patchServer(BY_ID.get(id), o);
+    }
+  }
+
+  // ---- live numbers (from the single-server endpoint) layered over the snapshot
+  const LIVE = new Map();
+  function patchServer(s, o) {
+    if (!s || !o) return;
+    s.clients = o.clients; s.maxClients = o.maxClients || s.maxClients; s.upvotePower = o.upvotePower ?? s.upvotePower;
+    s.full = s.maxClients > 0 && s.clients >= s.maxClients;
+  }
+  function applyLive(id, live) {
+    const d = live && live.Data;
+    if (!d || typeof d.clients !== 'number') return false;
+    const o = { at: Date.now(), clients: d.clients, maxClients: d.svMaxclients ?? d.sv_maxclients, upvotePower: d.upvotePower };
+    LIVE.set(id, o);
+    patchServer(BY_ID.get(id), o);
+    return true;
+  }
+  async function fetchLive(id) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(CFG.liveServerApi + encodeURIComponent(id), { signal: ctrl.signal, cache: 'no-store' });
+      return res.ok ? await res.json() : null;
+    } catch { return null; } finally { clearTimeout(t); }
   }
 
   async function loadData() {
@@ -530,7 +560,9 @@
   function renderTotals() {
     const list = ALL.filter((s) => s.game === state.game);
     const players = list.reduce((n, s) => n + s.clients, 0);
-    $totals.innerHTML = `<span><b>${fmt(players)}</b> players</span><span><b>${fmt(list.length)}</b> servers</span>`;
+    const age = updatedAt ? Math.max(0, Math.round((Date.now() - updatedAt.getTime()) / 60000)) : null;
+    $totals.innerHTML = `<span><b>${fmt(players)}</b> players</span><span><b>${fmt(list.length)}</b> servers</span>`
+      + (age !== null ? `<span title="Server list snapshot from ${esc(updatedAt.toLocaleString())}">Updated ${age < 1 ? 'just now' : age + ' min ago'}</span>` : '');
     if ($updated) $updated.textContent = updatedAt ? `Data updated ${updatedAt.toLocaleString()}` : '';
   }
 
@@ -683,15 +715,12 @@
     for (const wait of [0, 1500, 4000]) {
       if (wait) await new Promise((r) => setTimeout(r, wait));
       if (!stillHere()) return;
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(CFG.liveServerApi + encodeURIComponent(id), { signal: ctrl.signal, cache: 'no-store' });
-        clearTimeout(t);
-        if (res.ok) { live = await res.json(); break; }
-      } catch { /* try again */ }
+      const r = await fetchLive(id);
+      if (r) { live = r; break; }
     }
     if (live && live.Data) {
+      applyLive(id, live);
+      renderTotals();
       try { sessionStorage.setItem('live:' + id, JSON.stringify({ at: Date.now(), live })); } catch { /* ignore */ }
     } else {
       // Fall back to the last good live response from this browser session (≤ 30 min old).
@@ -760,14 +789,29 @@
       return;
     }
     route();
-    if (CFG.refreshSeconds > 0) {
-      setInterval(async () => {
-        try {
-          await loadData();
-          if (parseHash().view === 'list' && document.getElementById('rows')) updateList(true);
-        } catch { /* keep current data */ }
-      }, CFG.refreshSeconds * 1000);
+
+    const onList = () => parseHash().view === 'list' && document.getElementById('rows');
+    let lastLoad = Date.now();
+    async function refreshSnapshot() {
+      try {
+        await loadData();
+        lastLoad = Date.now();
+        if (onList()) updateList(true);
+      } catch { /* keep current data */ }
     }
+    // Pinned servers get live numbers straight from Cfx.re, so they never lag behind.
+    async function refreshPinned() {
+      if (document.hidden || !onList() || state.list !== 'all') return;
+      let changed = false;
+      for (const id of CFG.pinnedServers || []) if (applyLive(id, await fetchLive(id))) changed = true;
+      if (changed && onList()) { renderPinned(); renderTotals(); }
+    }
+    if (CFG.refreshSeconds > 0) setInterval(() => { if (!document.hidden) refreshSnapshot(); }, CFG.refreshSeconds * 1000);
+    if (CFG.pinnedLiveSeconds > 0) { refreshPinned(); setInterval(refreshPinned, CFG.pinnedLiveSeconds * 1000); }
+    setInterval(() => { if (!document.hidden) renderTotals(); }, 60000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && Date.now() - lastLoad > 60000) { refreshSnapshot(); refreshPinned(); }
+    });
   }
 
   boot();
