@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "build:data": "node scripts/build-data.js",
+    "preview": "node scripts/serve.js"
   },
   "dependencies": {
     "body-parser": "^2.3.0",

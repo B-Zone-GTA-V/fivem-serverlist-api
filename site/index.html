@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Masterlist</title>
+  <meta name="description" content="Browse every FiveM and RedM server, sorted by players, with country, tag and search filters.">
+  <meta name="theme-color" content="#0e0e12">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="preload" href="data/servers.json" as="fetch" crossorigin>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/">
+        <img src="assets/logo.svg" alt="" width="28" height="28">
+        <span class="brand-name" id="brandName">Masterlist</span>
+      </a>
+      <nav class="tabs" id="tabs">
+        <a href="#/?list=all" data-list="all">All servers</a>
+        <a href="#/?list=supporters" data-list="supporters">Supporters</a>
+        <a href="#/?list=favorites" data-list="favorites">Favorites</a>
+      </nav>
+      <div class="game-switch" id="gameSwitch" role="group" aria-label="Game">
+        <button data-game="fivem">FiveM</button>
+        <button data-game="redm">RedM</button>
+      </div>
+      <div class="totals" id="totals"></div>
+    </div>
+  </header>
+
+  <main id="app">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div>Loading server list…</div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span id="updatedAt"></span>
+    <span>Unofficial server browser. Not affiliated with Cfx.re or Rockstar Games.</span>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
