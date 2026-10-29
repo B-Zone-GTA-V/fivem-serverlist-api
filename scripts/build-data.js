@@ -136,6 +136,9 @@ async function main() {
   fs.writeFileSync(OUT_FILE, JSON.stringify(out));
   const players = rows.reduce((n, r) => n + r[iClients], 0);
   console.log(`Wrote ${rows.length} servers (${players} players) to ${OUT_FILE} (${(fs.statSync(OUT_FILE).size / 1e6).toFixed(1)} MB)`);
+
+  // Bust browser caches for CSS/JS changed since the last deploy.
+  require('./stamp-assets').stamp();
 }
 
 main().catch((e) => {

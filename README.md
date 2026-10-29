@@ -43,6 +43,8 @@ npm run preview      # http://localhost:8080
 ```
 
 ### Customize
+After editing files in `site/`, run `npm run stamp` (or `npm run build:data`, which does it too) so `index.html` points at the new versions and browsers don't keep a stale cached copy. The GitHub Action also does this on every deploy.
+
 Edit `site/config.js` for the site name, refresh interval and API URLs. Colours are CSS variables at the top of `site/assets/style.css` (`--accent`, `--bg`, …).
 
 ### Search syntax
