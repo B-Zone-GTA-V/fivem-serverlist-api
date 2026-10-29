@@ -10,7 +10,7 @@ const crypto = require('crypto');
 
 const SITE = path.join(__dirname, '..', 'site');
 const INDEX = path.join(SITE, 'index.html');
-const ASSETS = ['config.js', 'assets/app.js', 'assets/style.css', 'assets/logo.svg'];
+const ASSETS = ['config.js', 'assets/app.js', 'assets/style.css', 'assets/logo.svg', 'assets/live-worker.js'];
 
 function stamp() {
   let html = fs.readFileSync(INDEX, 'utf8');

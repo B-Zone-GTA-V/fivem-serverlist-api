@@ -6,8 +6,12 @@ window.SITE_CONFIG = {
   // Snapshot produced by scripts/build-data.js (refreshed by GitHub Actions).
   dataUrl: 'data/servers.json',
 
-  // How often an open tab re-downloads the snapshot (seconds).
-  refreshSeconds: 120,
+  // Load the full server list live from Cfx.re in the browser (like the official site),
+  // showing the GitHub Actions snapshot first and as a fallback. false = snapshot only.
+  liveList: true,
+
+  // How often an open tab refreshes the list (seconds) — live stream, or snapshot as fallback.
+  refreshSeconds: 180,
 
   // Live single-server endpoint used on the detail page for players/resources.
   // If the browser blocks it (CORS), the page falls back to snapshot data.

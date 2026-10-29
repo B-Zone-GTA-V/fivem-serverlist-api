@@ -25,6 +25,7 @@ For any legal questions or concerns regarding this project or its usage, please 
 ### How it works
 - `scripts/build-data.js` reads the CFX server stream with the same decoder the API uses (`cfx/master.js` + `FrameReader`) and writes a compact snapshot to `site/data/servers.json`.
 - `.github/workflows/pages.yml` runs that script every 10 minutes (and on every push), then deploys `site/` to GitHub Pages. If CFX can't be reached on a run, it re-publishes the previous snapshot.
+- In the browser, the site then loads the full list live from Cfx.re (the same stream the official site uses), decoded in a Web Worker (`site/assets/live-worker.js`). The snapshot is shown first and is the fallback if Cfx.re refuses. Turn this off with `liveList: false` in `site/config.js`.
 - The detail page also asks the live CFX API for the player list. If the browser blocks that request, it shows the snapshot data instead.
 
 ### Deploy

@@ -331,3 +331,7 @@ button { cursor: pointer; }
   .pin-name { font-size: 18px; }
   .pin-connect { width: 100%; justify-content: center; }
 }
+
+/* live indicator in the header */
+.live-dot { display: inline-flex; align-items: center; gap: 6px; }
+.live-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(62, 207, 142, .18); }

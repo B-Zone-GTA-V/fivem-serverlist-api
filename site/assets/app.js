@@ -10,6 +10,8 @@
     pageSize: 60,
     pinnedServers: [],
     pinnedLiveSeconds: 60,
+    liveList: true,
+    liveStreamUrl: '',
   }, window.SITE_CONFIG || {});
 
   const $app = document.getElementById('app');
@@ -134,11 +136,40 @@
     } catch { return null; } finally { clearTimeout(t); }
   }
 
+  let isLive = false;
   async function loadData() {
     const res = await fetch(CFG.dataUrl, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    hydrate(await res.json());
+    const json = await res.json();
+    // Never replace newer live-stream data with an older snapshot.
+    if (updatedAt && json.updatedAt && Date.parse(json.updatedAt) <= updatedAt.getTime()) return false;
+    hydrate(json);
+    isLive = false;
     renderTotals();
+    return true;
+  }
+
+  // Full live list from Cfx.re, decoded in a Web Worker (assets/live-worker.js).
+  let liveRunning = false;
+  function loadLiveList() {
+    if (liveRunning || !CFG.liveList || typeof Worker === 'undefined') return Promise.resolve(false);
+    liveRunning = true;
+    return new Promise((resolve) => {
+      let w;
+      const finish = (ok) => { liveRunning = false; try { w && w.terminate(); } catch { /* ignore */ } resolve(ok); };
+      const timer = setTimeout(() => finish(false), 90000);
+      try {
+        const src = document.querySelector('meta[name="live-worker"]')?.content || 'assets/live-worker.js';
+        w = new Worker(src);
+      } catch { clearTimeout(timer); finish(false); return; }
+      w.onmessage = (e) => {
+        clearTimeout(timer);
+        if (e.data?.type === 'done') { hydrate(e.data.data); isLive = true; renderTotals(); finish(true); }
+        else finish(false);
+      };
+      w.onerror = () => { clearTimeout(timer); finish(false); };
+      w.postMessage({ url: CFG.liveStreamUrl || '' });
+    });
   }
 
   // ----------------------------------------------------------------- state
@@ -562,7 +593,7 @@
     const players = list.reduce((n, s) => n + s.clients, 0);
     const age = updatedAt ? Math.max(0, Math.round((Date.now() - updatedAt.getTime()) / 60000)) : null;
     $totals.innerHTML = `<span><b>${fmt(players)}</b> players</span><span><b>${fmt(list.length)}</b> servers</span>`
-      + (age !== null ? `<span title="Server list snapshot from ${esc(updatedAt.toLocaleString())}">Updated ${age < 1 ? 'just now' : age + ' min ago'}</span>` : '');
+      + (age !== null ? `<span class="${isLive ? 'live-dot' : ''}" title="${isLive ? 'Live from Cfx.re' : 'Snapshot'} · ${esc(updatedAt.toLocaleString())}">${isLive ? 'Live · ' : ''}Updated ${age < 1 ? 'just now' : age + ' min ago'}</span>` : '');
     if ($updated) $updated.textContent = updatedAt ? `Data updated ${updatedAt.toLocaleString()}` : '';
   }
 
@@ -792,20 +823,23 @@
 
     const onList = () => parseHash().view === 'list' && document.getElementById('rows');
     let lastLoad = Date.now();
+    // Prefer the live stream; fall back to the GitHub Actions snapshot if Cfx.re refuses.
     async function refreshSnapshot() {
-      try {
-        await loadData();
-        lastLoad = Date.now();
-        if (onList()) updateList(true);
-      } catch { /* keep current data */ }
+      lastLoad = Date.now();
+      let ok = await loadLiveList();
+      if (!ok) { try { ok = await loadData(); } catch { ok = false; } }
+      if (ok && onList()) updateList(true);
     }
     // Pinned servers get live numbers straight from Cfx.re, so they never lag behind.
     async function refreshPinned() {
       if (document.hidden || !onList() || state.list !== 'all') return;
       let changed = false;
       for (const id of CFG.pinnedServers || []) if (applyLive(id, await fetchLive(id))) changed = true;
-      if (changed && onList()) { renderPinned(); renderTotals(); }
+      // Redraw the whole list (not just the card) so the server's row and its position match.
+      if (changed && onList()) { updateList(true); renderTotals(); }
     }
+    // Swap the snapshot for live data right after the first paint.
+    refreshSnapshot();
     if (CFG.refreshSeconds > 0) setInterval(() => { if (!document.hidden) refreshSnapshot(); }, CFG.refreshSeconds * 1000);
     if (CFG.pinnedLiveSeconds > 0) { refreshPinned(); setInterval(refreshPinned, CFG.pinnedLiveSeconds * 1000); }
     setInterval(() => { if (!document.hidden) renderTotals(); }, 60000);
