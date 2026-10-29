@@ -131,9 +131,10 @@
         q: p.get('q') || '',
         sort: ['players', 'boosts', 'name', 'country'].includes(p.get('sort')) ? p.get('sort') : 'players',
         dir: p.get('dir') === 'asc' ? 'asc' : (p.get('dir') === 'desc' ? 'desc' : (p.get('sort') === 'name' || p.get('sort') === 'country' ? 'asc' : 'desc')),
-        country: arr('country').map((c) => c.toUpperCase()),
-        tag: arr('tag'),
-        lang: arr('lang'),
+        // Filters missing from the URL come from the last visit (saved in localStorage).
+        country: p.has('country') ? arr('country').map((c) => c.toUpperCase()) : savedFilters().country,
+        tag: p.has('tag') ? arr('tag') : savedFilters().tag,
+        lang: p.has('lang') ? arr('lang') : savedFilters().lang,
         hideEmpty: p.get('hideEmpty') === '1',
         hideFull: p.get('hideFull') === '1',
       },
@@ -157,9 +158,20 @@
     return '#/' + (qs ? '?' + qs : '');
   }
 
+  function savedFilters() {
+    const f = store.get('filters', {});
+    const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x).slice(0, 50) : []);
+    return { country: list(f.country), tag: list(f.tag), lang: list(f.lang) };
+  }
+
+  function saveFilters() {
+    store.set('filters', { country: state.country, tag: state.tag, lang: state.lang });
+  }
+
   function setState(patch) {
     state = { ...state, ...patch };
     store.set('game', state.game);
+    saveFilters();
     history.replaceState(null, '', stateToHash(state));
     updateList();
   }
@@ -712,7 +724,7 @@
 
   document.querySelectorAll('#gameSwitch button').forEach((b) => b.addEventListener('click', () => {
     if (parseHash().view === 'detail') { state.game = b.dataset.game; location.hash = stateToHash(state); return; }
-    setState({ game: b.dataset.game, country: [], tag: [], lang: [] });
+    setState({ game: b.dataset.game });
     renderTotals();
   }));
 
