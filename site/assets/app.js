@@ -598,12 +598,27 @@
       : `${fmt(currentList.length)} servers · ${fmt(players)} players`;
   }
 
+  const STALE_MINUTES = 30;
+  function fmtAge(min) {
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min} min ago`;
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h < 24) return m ? `${h} h ${m} min ago` : `${h} h ago`;
+    const d = Math.floor(h / 24);
+    return d === 1 ? '1 day ago' : `${d} days ago`;
+  }
+
   function renderTotals() {
     const list = ALL.filter((s) => s.game === state.game);
     const players = list.reduce((n, s) => n + s.clients, 0);
     const age = updatedAt ? Math.max(0, Math.round((Date.now() - updatedAt.getTime()) / 60000)) : null;
+    // The snapshot is rebuilt every ~10 min. Older than this means the pipeline is stuck.
+    const stale = age !== null && age > STALE_MINUTES;
+    const cls = isLive ? 'live-dot' : stale ? 'stale-dot' : '';
+    const tip = (isLive ? 'Live from Cfx.re' : stale ? 'Player counts are out of date — the list could not be refreshed' : 'Snapshot')
+      + ' · ' + (updatedAt ? updatedAt.toLocaleString() : '');
     $totals.innerHTML = `<span><b>${fmt(players)}</b> players</span><span><b>${fmt(list.length)}</b> servers</span>`
-      + (age !== null ? `<span class="${isLive ? 'live-dot' : ''}" title="${isLive ? 'Live from Cfx.re' : 'Snapshot'} · ${esc(updatedAt.toLocaleString())}">${isLive ? 'Live · ' : ''}Updated ${age < 1 ? 'just now' : age + ' min ago'}</span>` : '');
+      + (age !== null ? `<span class="${cls}" title="${esc(tip)}">${isLive ? 'Live · ' : stale ? 'Delayed · ' : ''}Updated ${fmtAge(age)}</span>` : '');
     if ($updated) $updated.textContent = updatedAt ? `Data updated ${updatedAt.toLocaleString()}` : '';
   }
 

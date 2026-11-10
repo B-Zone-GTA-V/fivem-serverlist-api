@@ -394,3 +394,6 @@ button { cursor: pointer; }
 .collecting span { color: var(--text-2); font-size: 13px; }
 .spinner.sm { width: 22px; height: 22px; border-width: 2px; flex: none; }
 .collect-ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
+
+.stale-dot { display: inline-flex; align-items: center; gap: 6px; color: #f5b942; }
+.stale-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #f5b942; box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.18); }
